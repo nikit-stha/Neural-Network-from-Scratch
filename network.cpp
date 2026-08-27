@@ -8,7 +8,10 @@ enum class ActivationType{
     ReLU,
     Sigmoid,
     Softmax,
-    Tanh
+    Tanh,
+    LeakyReLU,
+    GeLU,
+    Linear
 };
 
 enum class LossFunction{
@@ -25,8 +28,16 @@ enum class Optimizer{
     RMSProp
 };
 
+struct Parameters{
+    vector<vector<double>> weights;
+    vector<double> bias;
+
+    vector<vector<double>> dW;
+    vector<double> dB;
+};
+
 class Layer{
-    private:
+    public:         //! Change to Private
         int inputFeatureDim;
         int outputFeatureDim;
         ActivationType activationFunction;
@@ -75,6 +86,12 @@ class Layer{
             initialize();
         }
 
+        double normalPDF(double x, double mean, double sigma){
+        static const double inv_sqrt_2pi = 0.3989422804014327;
+        double a = (x - mean) / sigma;
+        return (inv_sqrt_2pi / sigma) * exp(-0.5 * a * a);
+        }
+
         vector<double> activation(vector<double> &z){
             vector<double> output(z);
             if(this->activationFunction == ActivationType :: ReLU){
@@ -99,6 +116,21 @@ class Layer{
                 }
                 for(int i = 0 ; i < z.size() ; i++){
                     output[i] = (double) (exp(z[i]) / sum);
+                }
+            }
+            else if(this->activationFunction == ActivationType :: GeLU){
+                for(int i = 0 ; i < z.size() ; i++){
+                    output[i] = z[i] * normalPDF(z[i], 0.0, 1.0);
+                }
+            }
+            else if(this->activationFunction == ActivationType :: LeakyReLU){
+                for(int i = 0 ; i < z.size() ; i++){
+                    output[i] = max(0.01 * z[i], z[i]);
+                }
+            }
+            else if(this->activationFunction == ActivationType :: Linear){
+                for(int i = 0 ; i < z.size() ; i++){
+                    output[i] = z[i];
                 }
             }
             else{
@@ -132,7 +164,33 @@ class Layer{
                     derivative[i] = (1.0 - output[i] * output[i]);
                 }
             }
-            //! For Softmax is not Done
+            else if(this->activationFunction == ActivationType :: GeLU){
+                for(int i = 0 ; i < z.size() ; i++){
+                    derivative[i] = normalPDF(z[i], 0.0, 1.0) + z[i] * normalPDF(z[i], 0.0, 1.0);
+                }
+            }
+            else if(this->activationFunction == ActivationType :: LeakyReLU){
+                for(int i = 0 ; i < z.size() ; i++){
+                    if(z[i] <= 0){
+                        derivative[i] = 0.01;
+                    }
+                    else{
+                        derivative[i] = 1.0;
+                    }
+                }
+            }
+            else if(this->activationFunction == ActivationType :: Linear){
+                for(int i = 0 ; i < z.size() ; i++){
+                    derivative[i] = 1.0;
+                }
+            }
+            else if(this->activationFunction == ActivationType :: Softmax){
+                //! Considering Softmax to be used with CrossCategoricalEntropyLoss
+                vector<double> softmax = activation(z);
+                for(int i = 0 ; i < z.size() ; i++){
+                    derivative[i] = softmax[i] - z[i];
+                }
+            }
             else{
                 cout << "Incorrect Activation Function" << endl;
                 return {};
@@ -173,10 +231,11 @@ class Layer{
         }
 
         vector<vector<double>> backward(vector<vector<double>> &dl_da){
+            int batchSize = dl_da.size();
             
-            vector<vector<double>> dl_dz(this->batchSize, vector<double>(this->outputFeatureDim));
+            vector<vector<double>> dl_dz(batchSize, vector<double>(this->outputFeatureDim));
 
-            for(int i = 0 ; i < this->batchSize ; i++){
+            for(int i = 0 ; i < batchSize ; i++){
                 vector<double> rows = activationDerivative(this->lastZ[i]);
                 for(int j = 0 ; j < this->outputFeatureDim ; j++){
                     dl_dz[i][j] = dl_da[i][j] * rows[j];
@@ -231,7 +290,7 @@ class Network{
             layers.emplace_back(inputFeatureDim, outputFeatureDim, activationType, batchSize);
         }
 
-        vector<vector<double>> feedforward(vector<vector<double>> &input){
+        vector<vector<double>> forwardpass(vector<vector<double>> &input){
             vector<vector<double>> ans = input;
             for(auto &layer : layers){
                 ans = layer.forward(ans);
@@ -249,7 +308,7 @@ class Network{
 
             if(this->lossFunction == LossFunction :: MSELoss){
                 double sum = 0;
-                vector<vector<double>> prediction = feedforward(input);
+                vector<vector<double>> prediction = forwardpass(input);
 
                 for(int i = 0 ; i < batchSize ; i++){
                     for(int j = 0 ; j < prediction[0].size() ; j++){
@@ -263,7 +322,7 @@ class Network{
             }
             else if(this->lossFunction == LossFunction :: MAELoss){
                 double sum = 0;
-                vector<vector<double>> prediction = feedforward(input);
+                vector<vector<double>> prediction = forwardpass(input);
 
                 for(int i = 0 ; i < batchSize ; i++){
                     for(int j = 0 ; j < prediction[0].size() ; j++){
@@ -277,28 +336,85 @@ class Network{
             }
         }
 
+        void backwardPass(vector<vector<double>> &input, vector<vector<double>> &target) {
+            vector<vector<double>> y_pred = forwardpass(input);
+            int bSize = input.size();
+            int outDim = target[0].size();
 
+            vector<vector<double>> dl_da(bSize, vector<double>(outDim, 0.0));
+
+            if (this->lossFunction == LossFunction::MSELoss) {
+                for (int i = 0; i < bSize; i++) {
+                    for (int j = 0; j < outDim; j++) {
+                        dl_da[i][j] = y_pred[i][j] - target[i][j];
+                    }
+                }
+            } 
+            else if (this->lossFunction == LossFunction::MAELoss) {
+                for (int i = 0; i < bSize; i++) {
+                    for (int j = 0; j < outDim; j++) {
+                        if (y_pred[i][j] > target[i][j]) dl_da[i][j] = 1.0;
+                        else if (y_pred[i][j] < target[i][j]) dl_da[i][j] = -1.0;
+                        else dl_da[i][j] = 0.0;
+                    }
+                }
+            }
+
+            //! Other Loss Function is not Complete
+
+            vector<vector<double>> currentGradient = dl_da;
+            if (this->optimizer == Optimizer::SGD) {
+                for (int l = (int)layers.size() - 1; l >= 0; l--) {
+                    currentGradient = layers[l].backward(currentGradient);
+                    for (int i = 0; i < layers[l].outputFeatureDim; i++) {
+                        layers[l].bias[i] -= this->learningRate * layers[l].dB[i];
+
+                        for (int j = 0; j < layers[l].inputFeatureDim; j++) {
+                            layers[l].weights[i][j] -= this->learningRate * layers[l].dW[i][j];
+                        }
+                    }
+                }
+            }
+        }
+        
 };
 
+int batchSize = 2;
+
 int main(){
-    vector<vector<double>> input = {{100, 2, 3},{4, 50, -6}};
-    vector<vector<double>> y = {{1.0}, {2.0}};
+    vector<vector<double>> data = {{1.0, 2.0, 3.0}, 
+                                    {4.0, 5.0, 6.0},
+                                     {7.0, 8.0, 9.0},
+                                      {10.0, 11.0, 12.0},
+                                       {13.0, 14.0, 15.0},
+                                        {16.0, 17.0, 18.0}};
 
-    Network nn(LossFunction :: MSELoss, Optimizer :: Adam, 0.001);
+    vector<vector<double>> output = {{1.0},
+                                    {2.0},
+                                    {3.0},
+                                    {4.0},
+                                    {5.0},
+                                    {6.0}};
 
-    nn.addLayer(input[0].size(), 2, ActivationType :: ReLU, 2);
-    nn.addLayer(2, 1, ActivationType :: ReLU, 2);
+    int inputFeatureSize = data[0].size(), outputFeatureSize = 1;
 
-    vector<vector<double>> output = nn.feedforward(input);
-    
-    for(int i = 0 ; i < output.size() ; i++){
-        for(double val : output[i]){
-            cout << val << "\t\t";
+    Network nn(LossFunction :: MSELoss, Optimizer :: SGD, 0.001);
+    nn.addLayer(inputFeatureSize, 5, ActivationType :: ReLU, batchSize);
+    nn.addLayer(5, outputFeatureSize, ActivationType :: Linear, batchSize);
+
+
+    vector<vector<double>> testX = {{17.0, 18.0, 19.0}};
+    int epochs = 1000;
+
+    for(int i = 0 ; i < epochs ; i++){
+        nn.backwardPass(data, output);
+    }
+
+    vector<vector<double>> prediction = nn.forwardpass(testX);
+    for(int i = 0 ; i < prediction.size() ; i++){
+        for(double val : prediction[i]){
+            cout << val << " ";
         }
         cout << endl;
     }
-
-double loss = nn.loss(input, y);
-cout << "Loss :" << loss << endl;
-
 }
