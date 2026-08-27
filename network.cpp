@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <random>
+#include <algorithm>
 
 using namespace std;
 
@@ -109,13 +110,15 @@ class Layer{
                     output[i] = tanh(z[i]);
                 }
             }
-            else if(this->activationFunction == ActivationType :: Softmax){
-                double sum = 0;
-                for(int i = 0 ; i < z.size() ; i++){
-                    sum += exp(z[i]);
+            else if(this->activationFunction == ActivationType::Softmax){
+                double maxZ = *max_element(z.begin(), z.end());
+                double sum = 0.0;
+
+                for(int i = 0; i < z.size(); i++){
+                    sum += exp(z[i] - maxZ);
                 }
-                for(int i = 0 ; i < z.size() ; i++){
-                    output[i] = (double) (exp(z[i]) / sum);
+                for(int i = 0; i < z.size(); i++){
+                    output[i] = exp(z[i] - maxZ) / sum;
                 }
             }
             else if(this->activationFunction == ActivationType :: GeLU){
@@ -184,17 +187,13 @@ class Layer{
                     derivative[i] = 1.0;
                 }
             }
-            else if(this->activationFunction == ActivationType :: Softmax){
-                //! Considering Softmax to be used with CrossCategoricalEntropyLoss
-                vector<double> softmax = activation(z);
-                for(int i = 0 ; i < z.size() ; i++){
-                    derivative[i] = softmax[i] - z[i];
-                }
-            }
-            else{
-                cout << "Incorrect Activation Function" << endl;
-                return {};
-            }
+            // else if(this->activationFunction == ActivationType :: Softmax){
+            //     //! Considering Softmax to be used with CrossCategoricalEntropyLoss
+            //     vector<double> softmax = activation(z);
+            //     for(int i = 0 ; i < z.size() ; i++){
+            //         derivative[i] = softmax[i] - z[i];
+            //     }
+            // }
             return derivative;
         }
 
@@ -235,15 +234,24 @@ class Layer{
             
             vector<vector<double>> dl_dz(batchSize, vector<double>(this->outputFeatureDim));
 
-            for(int i = 0 ; i < batchSize ; i++){
-                vector<double> rows = activationDerivative(this->lastZ[i]);
-                for(int j = 0 ; j < this->outputFeatureDim ; j++){
-                    dl_dz[i][j] = dl_da[i][j] * rows[j];
+            if (this->activationFunction == ActivationType::Softmax) {
+                //! Only For SoftMax (Bug)!
+                for(int i = 0; i < batchSize; i++){
+                    for(int j = 0; j < this->outputFeatureDim; j++){
+                        dl_dz[i][j] = dl_da[i][j];
+                    }
                 }
             }
-
-            for (int j = 0; j < outputFeatureDim; j++) {
-                for (int k = 0; k < inputFeatureDim; k++) {
+            else{
+                for(int i = 0 ; i < batchSize ; i++){
+                    vector<double> rows = activationDerivative(this->lastZ[i]);
+                    for(int j = 0 ; j < this->outputFeatureDim ; j++){
+                        dl_dz[i][j] = dl_da[i][j] * rows[j];
+                    }
+                }
+            }
+            for(int j = 0; j < outputFeatureDim; j++){
+                for(int k = 0; k < inputFeatureDim; k++){
                     double sum = 0.0;
                     for (int i = 0; i < batchSize; i++) {
                         sum += dl_dz[i][j] * lastInput[i][k];
@@ -252,10 +260,10 @@ class Layer{
                 }
             }
 
-            for (int j = 0; j < outputFeatureDim; j++) {
+            for(int j = 0; j < outputFeatureDim; j++){
                 double sum = 0.0;
-                for (int i = 0; i < batchSize; i++) {
-                    sum += dl_dz[i][j];
+                for(int i = 0; i < batchSize; i++){
+                   sum += dl_dz[i][j];
                 }
                 this->dB[j] = sum / batchSize;
             }
@@ -307,7 +315,7 @@ class Network{
             double loss = 0.0;
 
             if(this->lossFunction == LossFunction :: MSELoss){
-                double sum = 0;
+                double sum = 0.0;
                 vector<vector<double>> prediction = forwardpass(input);
 
                 for(int i = 0 ; i < batchSize ; i++){
@@ -318,7 +326,15 @@ class Network{
                 return (double)(sum / batchSize);
             }
             else if(this->lossFunction == LossFunction :: CrossEntropyLoss){
-                //! Cross Entropy Loss Not Completed
+                double sum = 0.0;
+                vector<vector<double>> prediction = forwardpass(input);
+                for(int i = 0 ; i < batchSize ; i++){
+                    for(int j = 0 ; j < prediction[0].size() ; j++){
+                        double p = max(prediction[i][j], 1e-15);
+                        sum -= output[i][j] * log(p);
+                    }
+                }
+                return (double) (sum / batchSize);
             }
             else if(this->lossFunction == LossFunction :: MAELoss){
                 double sum = 0;
@@ -343,19 +359,27 @@ class Network{
 
             vector<vector<double>> dl_da(bSize, vector<double>(outDim, 0.0));
 
-            if (this->lossFunction == LossFunction::MSELoss) {
-                for (int i = 0; i < bSize; i++) {
-                    for (int j = 0; j < outDim; j++) {
+            if(this->lossFunction == LossFunction :: MSELoss){
+                for(int i = 0; i < bSize; i++){
+                    for(int j = 0; j < outDim; j++){
                         dl_da[i][j] = y_pred[i][j] - target[i][j];
                     }
                 }
             } 
-            else if (this->lossFunction == LossFunction::MAELoss) {
-                for (int i = 0; i < bSize; i++) {
-                    for (int j = 0; j < outDim; j++) {
+            else if(this->lossFunction == LossFunction :: MAELoss){
+                for(int i = 0; i < bSize; i++){
+                    for(int j = 0; j < outDim; j++){
                         if (y_pred[i][j] > target[i][j]) dl_da[i][j] = 1.0;
                         else if (y_pred[i][j] < target[i][j]) dl_da[i][j] = -1.0;
                         else dl_da[i][j] = 0.0;
+                    }
+                }
+            }
+
+            else if(this->lossFunction == LossFunction :: CrossEntropyLoss){
+                for(int i = 0 ; i < bSize ; i++){
+                    for(int j = 0 ; j < outDim ; j++){
+                        dl_da[i][j] = y_pred[i][j] - target[i][j];
                     }
                 }
             }
@@ -389,18 +413,18 @@ int main(){
                                        {13.0, 14.0, 15.0},
                                         {16.0, 17.0, 18.0}};
 
-    vector<vector<double>> output = {{1.0},
-                                    {2.0},
-                                    {3.0},
-                                    {4.0},
-                                    {5.0},
-                                    {6.0}};
+    vector<vector<double>> output = {{1.0, 0.0, 0.0, 0.0, 0.0},
+                                    {0.0, 1.0, 0.0, 0.0, 0.0},
+                                    {0.0, 1.0, 0.0, 0.0, 0.0},
+                                    {0.0, 1.0, 0.0, 0.0, 0.0},
+                                    {0.0, 0.0, 1.0, 0.0, 0.0},
+                                    {1.0, 0.0, 0.0, 0.0, 0.0}};
 
-    int inputFeatureSize = data[0].size(), outputFeatureSize = 1;
+    int inputFeatureSize = data[0].size(), outputFeatureSize = 5;
 
-    Network nn(LossFunction :: MSELoss, Optimizer :: SGD, 0.001);
+    Network nn(LossFunction :: CrossEntropyLoss, Optimizer :: SGD, 0.001);
     nn.addLayer(inputFeatureSize, 5, ActivationType :: ReLU, batchSize);
-    nn.addLayer(5, outputFeatureSize, ActivationType :: Linear, batchSize);
+    nn.addLayer(5, outputFeatureSize, ActivationType :: Softmax, batchSize);
 
 
     vector<vector<double>> testX = {{17.0, 18.0, 19.0}};
