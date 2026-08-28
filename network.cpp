@@ -30,15 +30,20 @@ enum class Optimizer{
 };
 
 struct Parameters{
-    vector<vector<double>> weights;
-    vector<double> bias;
+    vector<vector<double>> &weights;
+    vector<double> &bias;
 
-    vector<vector<double>> dW;
-    vector<double> dB;
+    vector<vector<double>> &dW;
+    vector<double> &dB;
+
+    int &inputFeatureDim;
+    int &outputFeatureDim;
+
+    ActivationType &activationFunction;
 };
 
 class Layer{
-    public:         //! Change to Private
+    private:
         int inputFeatureDim;
         int outputFeatureDim;
         ActivationType activationFunction;
@@ -277,6 +282,19 @@ class Layer{
             }
             return dA_prev;
         }
+
+        Parameters getParameters(){
+            return{
+                this->weights,
+                this->bias,
+                this->dW,
+                this->dB,
+                this->inputFeatureDim,
+                this->outputFeatureDim,
+                this->activationFunction,
+            };
+        }
+    
 };
 
 class Network{
@@ -349,10 +367,17 @@ class Network{
             }
             else if(this->lossFunction == LossFunction :: BinaryCrossEntropyLoss){
                 //! Binary Cross Entropy Loss Not Completed
+                int sum = 0;
+                return 0.0;
+            }
+            else{
+                cout << "Invalid Loss Function" << endl;
+                return 0.0;
             }
         }
 
         void backwardPass(vector<vector<double>> &input, vector<vector<double>> &target) {
+
             vector<vector<double>> y_pred = forwardpass(input);
             int bSize = input.size();
             int outDim = target[0].size();
@@ -390,55 +415,239 @@ class Network{
             if (this->optimizer == Optimizer::SGD) {
                 for (int l = (int)layers.size() - 1; l >= 0; l--) {
                     currentGradient = layers[l].backward(currentGradient);
-                    for (int i = 0; i < layers[l].outputFeatureDim; i++) {
-                        layers[l].bias[i] -= this->learningRate * layers[l].dB[i];
+                    Parameters param = layers[l].getParameters();
+                    for (int i = 0; i < param.outputFeatureDim; i++) {
+                        param.bias[i] -= this->learningRate * param.dB[i];
 
-                        for (int j = 0; j < layers[l].inputFeatureDim; j++) {
-                            layers[l].weights[i][j] -= this->learningRate * layers[l].dW[i][j];
+                        for (int j = 0; j < param.inputFeatureDim; j++) {
+                            param.weights[i][j] -= this->learningRate * param.dW[i][j];
                         }
                     }
                 }
+            }
+            else if(this->optimizer == Optimizer :: Momentum){
+                for(int l = layers.size() - 1 ; l >= 0 ; l--){
+                    Parameters param = layers[l].getParameters();
+                    currentGradient = layers[l].backward(currentGradient);
+                    for(int i = 0 ; i < param.outputFeatureDim ; i++){
+                        for(int j = 0 ; j < param.inputFeatureDim ; i++){
+                            //! Not Complete
+                        }
+                    }
+                }
+            }
+            else{
+                cout << "Invalid Optimizer " << endl;
+                return ;
             }
         }
         
 };
 
-int batchSize = 2;
+int batchSize = 6;
 
 int main(){
-    vector<vector<double>> data = {{1.0, 2.0, 3.0}, 
-                                    {4.0, 5.0, 6.0},
-                                     {7.0, 8.0, 9.0},
-                                      {10.0, 11.0, 12.0},
-                                       {13.0, 14.0, 15.0},
-                                        {16.0, 17.0, 18.0}};
+    vector<vector<double>> data = {
+    // Class 0
+    {1.0, 2.0, 1.5},
+    {1.2, 1.8, 1.7},
+    {0.8, 2.2, 1.3},
+    {1.5, 2.5, 1.8},
+    {1.1, 2.3, 1.6},
+    {1.7, 1.9, 2.0},
+    {0.9, 1.7, 1.4},
+    {1.3, 2.1, 1.9},
+    {1.6, 2.4, 1.7},
+    {1.0, 2.0, 1.2},
 
-    vector<vector<double>> output = {{1.0, 0.0, 0.0, 0.0, 0.0},
-                                    {0.0, 1.0, 0.0, 0.0, 0.0},
-                                    {0.0, 1.0, 0.0, 0.0, 0.0},
-                                    {0.0, 1.0, 0.0, 0.0, 0.0},
-                                    {0.0, 0.0, 1.0, 0.0, 0.0},
-                                    {1.0, 0.0, 0.0, 0.0, 0.0}};
+    // Class 1
+    {4.0, 5.0, 4.5},
+    {4.2, 5.3, 4.7},
+    {3.8, 4.7, 4.2},
+    {4.5, 5.5, 4.9},
+    {4.1, 5.1, 4.6},
+    {4.7, 4.9, 5.0},
+    {3.9, 5.2, 4.3},
+    {4.3, 5.4, 4.8},
+    {4.6, 5.2, 4.7},
+    {4.0, 4.8, 4.4},
+
+    // Class 2
+    {7.0, 8.0, 7.5},
+    {7.2, 8.3, 7.7},
+    {6.8, 7.7, 7.2},
+    {7.5, 8.5, 7.9},
+    {7.1, 8.1, 7.6},
+    {7.7, 7.9, 8.0},
+    {6.9, 8.2, 7.3},
+    {7.3, 8.4, 7.8},
+    {7.6, 8.2, 7.7},
+    {7.0, 7.8, 7.4},
+
+    // Class 3
+    {10.0, 11.0, 10.5},
+    {10.2, 11.3, 10.7},
+    {9.8, 10.7, 10.2},
+    {10.5, 11.5, 10.9},
+    {10.1, 11.1, 10.6},
+    {10.7, 10.9, 11.0},
+    {9.9, 11.2, 10.3},
+    {10.3, 11.4, 10.8},
+    {10.6, 11.2, 10.7},
+    {10.0, 10.8, 10.4},
+
+    // Class 4
+    {13.0, 14.0, 13.5},
+    {13.2, 14.3, 13.7},
+    {12.8, 13.7, 13.2},
+    {13.5, 14.5, 13.9},
+    {13.1, 14.1, 13.6},
+    {13.7, 13.9, 14.0},
+    {12.9, 14.2, 13.3},
+    {13.3, 14.4, 13.8},
+    {13.6, 14.2, 13.7},
+    {13.0, 13.8, 13.4}
+};
+
+vector<vector<double>> output = {
+    // Class 0
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+
+    // Class 1
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+
+    // Class 2
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+
+    // Class 3
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+
+    // Class 4
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1}
+};
+
+
+// Validation data
+vector<vector<double>> testX = {
+    {1.2, 2.1, 1.6},
+    {1.5, 1.8, 1.9},
+    {0.9, 2.3, 1.4},
+
+    {4.2, 5.1, 4.6},
+    {4.5, 4.8, 4.9},
+    {3.9, 5.3, 4.3},
+
+    {7.2, 8.1, 7.6},
+    {7.5, 7.8, 7.9},
+    {6.9, 8.3, 7.3},
+
+    {10.2, 11.1, 10.6},
+    {10.5, 10.8, 10.9},
+    {9.8, 11.3, 10.3},
+
+    {13.2, 14.1, 13.6},
+    {13.5, 13.8, 13.9},
+    {12.9, 14.3, 13.3}
+};
+
+vector<vector<double>> testY = {
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+    {1,0,0,0,0},
+
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+    {0,1,0,0,0},
+
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+    {0,0,1,0,0},
+
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+    {0,0,0,1,0},
+
+    {0,0,0,0,1},
+    {0,0,0,0,1},
+    {0,0,0,0,1}
+};
 
     int inputFeatureSize = data[0].size(), outputFeatureSize = 5;
 
-    Network nn(LossFunction :: CrossEntropyLoss, Optimizer :: SGD, 0.001);
+    Network nn(LossFunction :: CrossEntropyLoss, Optimizer :: SGD, 0.01);
     nn.addLayer(inputFeatureSize, 5, ActivationType :: ReLU, batchSize);
     nn.addLayer(5, outputFeatureSize, ActivationType :: Softmax, batchSize);
 
 
-    vector<vector<double>> testX = {{17.0, 18.0, 19.0}};
-    int epochs = 1000;
+    vector<double> trainingLoss;
+    vector<double> valLoss;
+
+    int epochs = 10000;
 
     for(int i = 0 ; i < epochs ; i++){
         nn.backwardPass(data, output);
+        trainingLoss.push_back(nn.loss(data, output));
+        valLoss.push_back(nn.loss(testX, testY));
+
     }
 
-    vector<vector<double>> prediction = nn.forwardpass(testX);
-    for(int i = 0 ; i < prediction.size() ; i++){
-        for(double val : prediction[i]){
-            cout << val << " ";
-        }
-        cout << endl;
+    for(int i = 0 ; i < trainingLoss.size() ; i++){
+        cout << trainingLoss[i] << endl;
+        cout << valLoss[i] << endl;
     }
+
+    // vector<vector<double>> prediction = nn.forwardpass(testX);
+    // for(int i = 0 ; i < prediction.size() ; i++){
+    //     for(double val : prediction[i]){
+    //         cout << val << " ";
+    //     }
+    //     cout << endl;
+    // }
+
+    cout << "N" << endl;
 }
