@@ -35,3 +35,5 @@ plt.ylabel("Value")
 plt.legend()
 plt.grid(True)
 plt.show()
+
+# Compile ./network | python main.py
