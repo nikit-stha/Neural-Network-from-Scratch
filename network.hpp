@@ -1,12 +1,8 @@
-#include <iostream>
 #include <vector>
 #include <random>
 #include <algorithm>
 #include <fstream>
 #include <string>
-#include <stdexcept>
-
-using namespace std;
 
 namespace nn{
     enum class ActivationType{
@@ -35,27 +31,27 @@ namespace nn{
 
     class DataLoader {
         private:
-            vector<vector<double>> data;
-            vector<vector<double>> output;
+            std::vector<std::vector<double>> data;
+            std::vector<std::vector<double>> output;
             int batchSize;
             bool shuffle;
-            vector<int> indices;
+            std::vector<int> indices;
             int currentBatch;
-            mt19937 generator;
+            std::mt19937 generator;
 
         public:
-            DataLoader(const vector<vector<double>>& data,const vector<vector<double>>& output,int batchSize,bool shuffle = true){
+            DataLoader(const std::vector<std::vector<double>>& data,const std::vector<std::vector<double>>& output,int batchSize,bool shuffle = true){
                 this->data = data;
                 this->output = output;
                 this->batchSize = batchSize;
                 this->shuffle = shuffle;
                 if(data.size() != output.size()){
-                    throw invalid_argument(
+                    throw std::invalid_argument(
                         "Data and output must contain the same number of samples."
                     );
                 }
                 if(batchSize <= 0){
-                    throw invalid_argument(
+                    throw std::invalid_argument(
                         "Batch size must be greater than 0."
                     );
                 }
@@ -75,11 +71,11 @@ namespace nn{
     };
 
     struct Parameters{
-        vector<vector<double>> &weights;
-        vector<double> &bias;
+        std::vector<std::vector<double>> &weights;
+        std::vector<double> &bias;
 
-        vector<vector<double>> &dW;
-        vector<double> &dB;
+        std::vector<std::vector<double>> &dW;
+        std::vector<double> &dB;
 
         int &inputFeatureDim;
         int &outputFeatureDim;
@@ -93,22 +89,22 @@ namespace nn{
             int outputFeatureDim;
             ActivationType activationFunction;
 
-            vector<vector<double>> weights;
-            vector<double> bias;
+            std::vector<std::vector<double>> weights;
+            std::vector<double> bias;
 
-            vector<vector<double>> lastInput;
-            vector<vector<double>> lastZ;
-            vector<vector<double>> lastOutput;
+            std::vector<std::vector<double>> lastInput;
+            std::vector<std::vector<double>> lastZ;
+            std::vector<std::vector<double>> lastOutput;
 
-            vector<vector<double>> dW;
-            vector<double> dB;
+            std::vector<std::vector<double>> dW;
+            std::vector<double> dB;
 
             void initialize(){
                 double limit = sqrt(6.0 / (inputFeatureDim + outputFeatureDim));
 
-                random_device rd;
-                mt19937 gen(rd());
-                uniform_real_distribution<double> dist(-limit, limit);
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<double> dist(-limit, limit);
 
                 for(int i = 0 ; i < outputFeatureDim ; i++){
                     this->bias[i] = dist(gen);
@@ -124,10 +120,10 @@ namespace nn{
                 this->outputFeatureDim = outputFeatureDim;
                 this->activationFunction = activationFunction;
 
-                this->weights.resize((this->outputFeatureDim), vector<double> (this->inputFeatureDim));
+                this->weights.resize((this->outputFeatureDim), std::vector<double> (this->inputFeatureDim));
                 this->bias.resize(this->outputFeatureDim);
 
-                this->dW.resize(this->outputFeatureDim, vector<double>(this->inputFeatureDim, 0.0));
+                this->dW.resize(this->outputFeatureDim, std::vector<double>(this->inputFeatureDim, 0.0));
                 this->dB.resize(this->outputFeatureDim, 0.0);
 
                 initialize();
@@ -139,11 +135,11 @@ namespace nn{
             return (inv_sqrt_2pi / sigma) * exp(-0.5 * a * a);
             }
 
-            vector<double> activation(vector<double> &z){
-                vector<double> output(z);
+            std::vector<double> activation(std::vector<double> &z){
+                std::vector<double> output(z);
                 if(this->activationFunction == ActivationType :: ReLU){
                     for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = max(0.0, z[i]);
+                        output[i] = std::max(0.0, z[i]);
                     }
                 }
                 else if(this->activationFunction == ActivationType :: Sigmoid){
@@ -174,7 +170,7 @@ namespace nn{
                 }
                 else if(this->activationFunction == ActivationType :: LeakyReLU){
                     for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = max(0.01 * z[i], z[i]);
+                        output[i] = std::max(0.01 * z[i], z[i]);
                     }
                 }
                 else if(this->activationFunction == ActivationType :: Linear){
@@ -183,14 +179,13 @@ namespace nn{
                     }
                 }
                 else{
-                    cout << "Incorrect Activation Function" << endl;
-                    return {};
+                    throw std::invalid_argument{"Activation Function is Invalid"};
                 }
                 return output;
             }
 
-            vector<double> activationDerivative(vector<double> &z){
-                vector<double> derivative(z);
+            std::vector<double> activationDerivative(std::vector<double> &z){
+                std::vector<double> derivative(z);
                 if(this->activationFunction == ActivationType :: ReLU){
                     for(int i = 0 ; i < z.size() ; i++){
                         if(z[i] <= 0.0){
@@ -202,13 +197,13 @@ namespace nn{
                     }
                 }
                 else if(this->activationFunction == ActivationType :: Sigmoid){
-                    vector<double> output = activation(z);
+                    std::vector<double> output = activation(z);
                     for(int i = 0 ; i < z.size() ; i++){
                         derivative[i] = output[i] * (1.0 - output[i]);
                     }
                 }
                 else if(this->activationFunction == ActivationType :: Tanh){
-                    vector<double> output = activation(z);
+                    std::vector<double> output = activation(z);
                     for(int i = 0 ; i < z.size() ; i++){
                         derivative[i] = (1.0 - output[i] * output[i]);
                     }
@@ -243,9 +238,9 @@ namespace nn{
                 return derivative;
             }
 
-            vector<vector<double>> matmul(const vector<vector<double>> &weights, const vector<vector<double>> &input) {
+            std::vector<std::vector<double>> matmul(const std::vector<std::vector<double>> &weights, const std::vector<std::vector<double>> &input) {
                     int batchSize = input.size();
-                    vector<vector<double>> ans(batchSize, vector<double>(this->outputFeatureDim, 0.0));
+                    std::vector<std::vector<double>> ans(batchSize, std::vector<double>(this->outputFeatureDim, 0.0));
 
                     for (int i = 0; i < batchSize; i++) {
                         for (int j = 0; j < this->outputFeatureDim; j++) {
@@ -257,12 +252,12 @@ namespace nn{
                     return ans;
                 }
 
-            vector<vector<double>> forward(vector<vector<double>> &input){
+            std::vector<std::vector<double>> forward(std::vector<std::vector<double>> &input){
                 int batchSize = input.size();
 
                 this->lastInput = input;
-                this->lastZ.assign(batchSize, vector<double>(this->outputFeatureDim, 0.0));
-                this->lastOutput.assign(batchSize, vector<double>(this->outputFeatureDim, 0.0));
+                this->lastZ.assign(batchSize, std::vector<double>(this->outputFeatureDim, 0.0));
+                this->lastOutput.assign(batchSize, std::vector<double>(this->outputFeatureDim, 0.0));
 
                 this->lastZ = matmul(this->weights, input);
 
@@ -275,10 +270,10 @@ namespace nn{
                 return this->lastOutput;
             }
 
-            vector<vector<double>> backward(vector<vector<double>> &dl_da){
+            std::vector<std::vector<double>> backward(std::vector<std::vector<double>> &dl_da){
                 int batchSize = dl_da.size();
                 
-                vector<vector<double>> dl_dz(batchSize, vector<double>(this->outputFeatureDim));
+                std::vector<std::vector<double>> dl_dz(batchSize, std::vector<double>(this->outputFeatureDim));
 
                 if (this->activationFunction == ActivationType::Softmax) {
                     //! Only For SoftMax (Bug)!
@@ -290,7 +285,7 @@ namespace nn{
                 }
                 else{
                     for(int i = 0 ; i < batchSize ; i++){
-                        vector<double> rows = activationDerivative(this->lastZ[i]);
+                        std::vector<double> rows = activationDerivative(this->lastZ[i]);
                         for(int j = 0 ; j < this->outputFeatureDim ; j++){
                             dl_dz[i][j] = dl_da[i][j] * rows[j];
                         }
@@ -313,7 +308,7 @@ namespace nn{
                     }
                     this->dB[j] = sum / batchSize;
                 }
-                vector<vector<double>> dA_prev(batchSize, vector<double>(inputFeatureDim, 0.0));
+                std::vector<std::vector<double>> dA_prev(batchSize, std::vector<double>(inputFeatureDim, 0.0));
                 for (int i = 0; i < batchSize; i++) {
                     for (int k = 0; k < inputFeatureDim; k++) {
                         for (int j = 0; j < outputFeatureDim; j++) {
@@ -336,18 +331,18 @@ namespace nn{
                 };
             }
         
-            vector<vector<double>> &getWeights(){
+            std::vector<std::vector<double>> &getWeights(){
                 return this->weights;
             }
 
-            vector<double> &getBias(){
+            std::vector<double> &getBias(){
                 return this->bias;
             }
     };
 
     class Network{
         private:
-            vector<Layer> layers;
+            std::vector<Layer> layers;
             double learningRate;
 
             LossFunction lossFunction;
@@ -364,25 +359,24 @@ namespace nn{
                 layers.emplace_back(inputFeatureDim, outputFeatureDim, activationType);
             }
 
-            vector<vector<double>> forwardpass(vector<vector<double>> &input){
-                vector<vector<double>> ans = input;
+            std::vector<std::vector<double>> forwardpass(std::vector<std::vector<double>> &input){
+                std::vector<std::vector<double>> ans = input;
                 for(auto &layer : layers){
                     ans = layer.forward(ans);
                 }
                 return ans;
             }
 
-            double loss(vector<vector<double>> &input, vector<vector<double>> &output){
+            double loss(std::vector<std::vector<double>> &input, std::vector<std::vector<double>> &output){
                 int batchSize = input.size();
                 if(batchSize != output.size()){
-                    cout << "Output and Input Dimention Mismatched" << endl;
-                    return 0;
+                    throw std::invalid_argument{"Input and Output Dimension Mismatched"};
                 }
-                double loss = 0.0;
+              double loss = 0.0;
 
                 if(this->lossFunction == LossFunction :: MSELoss){
                     double sum = 0.0;
-                    vector<vector<double>> prediction = forwardpass(input);
+                    std::vector<std::vector<double>> prediction = forwardpass(input);
 
                     for(int i = 0 ; i < batchSize ; i++){
                         for(int j = 0 ; j < prediction[0].size() ; j++){
@@ -393,10 +387,10 @@ namespace nn{
                 }
                 else if(this->lossFunction == LossFunction :: CrossEntropyLoss){
                     double sum = 0.0;
-                    vector<vector<double>> prediction = forwardpass(input);
+                    std::vector<std::vector<double>> prediction = forwardpass(input);
                     for(int i = 0 ; i < batchSize ; i++){
                         for(int j = 0 ; j < prediction[0].size() ; j++){
-                            double p = max(prediction[i][j], 1e-15);
+                            double p = std::max(prediction[i][j], 1e-15);
                             sum -= output[i][j] * log(p);
                         }
                     }
@@ -404,7 +398,7 @@ namespace nn{
                 }
                 else if(this->lossFunction == LossFunction :: MAELoss){
                     double sum = 0;
-                    vector<vector<double>> prediction = forwardpass(input);
+                    std::vector<std::vector<double>> prediction = forwardpass(input);
 
                     for(int i = 0 ; i < batchSize ; i++){
                         for(int j = 0 ; j < prediction[0].size() ; j++){
@@ -419,18 +413,17 @@ namespace nn{
                     return 0.0;
                 }
                 else{
-                    cout << "Invalid Loss Function" << endl;
-                    return 0.0;
+                    throw std::invalid_argument{"Invalid Loss Function"};
                 }
             }
 
-            void backwardPass(vector<vector<double>> &input, vector<vector<double>> &target) {
+            void backwardPass(std::vector<std::vector<double>> &input, std::vector<std::vector<double>> &target) {
 
-                vector<vector<double>> y_pred = forwardpass(input);
+                std::vector<std::vector<double>> y_pred = forwardpass(input);
                 int bSize = input.size();
                 int outDim = target[0].size();
 
-                vector<vector<double>> dl_da(bSize, vector<double>(outDim, 0.0));
+                std::vector<std::vector<double>> dl_da(bSize, std::vector<double>(outDim, 0.0));
 
                 if(this->lossFunction == LossFunction :: MSELoss){
                     for(int i = 0; i < bSize; i++){
@@ -459,7 +452,7 @@ namespace nn{
 
                 //! Other Loss Function is not Complete
 
-                vector<vector<double>> currentGradient = dl_da;
+                std::vector<std::vector<double>> currentGradient = dl_da;
                 if (this->optimizer == Optimizer::SGD) {
                     for (int l = (int)layers.size() - 1; l >= 0; l--) {
                         currentGradient = layers[l].backward(currentGradient);
@@ -485,17 +478,16 @@ namespace nn{
                     }
                 }
                 else{
-                    cout << "Invalid Optimizer " << endl;
-                    return ;
+                    throw std::runtime_error{"Invalid Optimizer"};
                 }
             }
             
-            void saveModel(const string &fileName){
+            void saveModel(const std::string &fileName){
 
                 //Create File
-                ofstream file(fileName, ios::binary);
+                std::ofstream file(fileName, std::ios::binary);
                 if(!file){
-                    throw runtime_error{"Couldnot open file for writing"};
+                    throw std::runtime_error{"Couldnot open file for writing"};
                 }
 
                 // Set Magic Number
@@ -531,19 +523,19 @@ namespace nn{
                     file.close();
             }
 
-            void loadModel(const string &fileName){
+            void loadModel(const std::string &fileName){
                 // Open File
-                ifstream file(fileName, ios::binary);
+                std::ifstream file(fileName, std::ios::binary);
                 if(!file){
-                    throw runtime_error {"Could not open model file for reading"};
+                    throw std::runtime_error {"Could not open model file for reading"};
                 }
 
                 // Check Magic number
                 char magic[8];
                 file.read(magic, sizeof(magic));
 
-                if(string(magic) != "Network"){
-                    throw runtime_error{"Invalid model file"};
+                if(std::string(magic) != "Network"){
+                    throw std::runtime_error{"Invalid model file"};
                 }
 
                 // Number of Layers
@@ -579,7 +571,7 @@ namespace nn{
                     // Load Bias
                     file.read((char *)(layerX.getBias().data()), outputFeatureDim * sizeof(double));
 
-                    layers.push_back(move(layerX));
+                    layers.push_back(std::move(layerX));
                 }
                 file.close();
             }
