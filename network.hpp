@@ -520,8 +520,8 @@ namespace nn{
                     file.write((char *)(&params.activationFunction), sizeof(params.activationFunction));
                     
                     // Write Weights
-                    for(int i = 0 ; i < params.inputFeatureDim ; i++){
-                        file.write((char *)(params.weights[i].data()), params.outputFeatureDim * sizeof(double));
+                    for(int i = 0 ; i < params.outputFeatureDim ; i++){
+                        file.write((char *)(params.weights[i].data()), params.inputFeatureDim * sizeof(double));
                     }
 
                     // Write Bias
@@ -572,8 +572,8 @@ namespace nn{
                     Layer layerX(inputFeatureDim, outputFeatureDim, activationType);
 
                     // Load Weights
-                    for(int i = 0 ; i < inputFeatureDim ; i++){
-                        file.read((char *)(layerX.getWeights()[i].data()), outputFeatureDim * sizeof(double));
+                    for(int i = 0 ; i < outputFeatureDim; i++){
+                        file.read((char *)(layerX.getWeights()[i].data()), inputFeatureDim * sizeof(double));
                     }
 
                     // Load Bias
