@@ -1,1 +1,6 @@
+MNIST
+MLP
+import
 network
+import_Data.py
+send_data.py

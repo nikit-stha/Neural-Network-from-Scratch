@@ -28,7 +28,7 @@ while True:
         print("Please enter numbers.")
 
 plt.plot(x, y1, marker="o", label="y1")
-plt.plot(x, y2, marker="o", label="y2")
+plt.plot(x, y2, marker="x", label="y2")
 
 plt.xlabel("Progress")
 plt.ylabel("Value")
@@ -36,4 +36,4 @@ plt.legend()
 plt.grid(True)
 plt.show()
 
-# Compile ./network | python main.py
+# Compile ./network | python loss_plot.py
