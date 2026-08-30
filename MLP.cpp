@@ -1,4 +1,7 @@
 #include <network.hpp>
+#include <iostream>
+#include <vector>
+
 using namespace nn;
 
 int batchSize = 1;
@@ -8,7 +11,7 @@ int epochs = 3;
 
 int main(){
 
-vector<vector<double>> data = {
+std::vector<std::vector<double>> data = {
     // Class 0
     {1.0, 2.0, 1.5},
     {1.2, 1.8, 1.7},
@@ -70,7 +73,7 @@ vector<vector<double>> data = {
     {13.0, 13.8, 13.4}
 };
 
-vector<vector<double>> output = {
+std::vector<std::vector<double>> output = {
     // Class 0
     {1,0,0,0,0},
     {1,0,0,0,0},
@@ -134,7 +137,7 @@ vector<vector<double>> output = {
 
 
 // Validation data
-vector<vector<double>> testX = {
+std::vector<std::vector<double>> testX = {
     {1.2, 2.1, 1.6},
     {1.5, 1.8, 1.9},
     {0.9, 2.3, 1.4},
@@ -156,7 +159,7 @@ vector<vector<double>> testX = {
     {12.9, 14.3, 13.3}
 };
 
-vector<vector<double>> testY = {
+std::vector<std::vector<double>> testY = {
     {1,0,0,0,0},
     {1,0,0,0,0},
     {1,0,0,0,0},
@@ -178,15 +181,17 @@ vector<vector<double>> testY = {
     {0,0,0,0,1}
 };
 
-    int inputFeatureSize = data[0].size(), outputFeatureSize = 5;
+    int inputFeatureSize = (data[0].size());
+    int outputFeatureSize = 5;
 
-    Network network(LossFunction :: CrossEntropyLoss, Optimizer :: SGD, 0.01);
-    network.loadModel("model.bin");
+    Network network(LossFunction::CrossEntropyLoss, Optimizer::Adam, 0.01);
+    network.Linear(inputFeatureSize, 10, ActivationType::GeLU);
+    network.Linear(10, outputFeatureSize, ActivationType::Softmax);
 
-    vector<double> trainingLoss;
-    vector<double> valLoss;
+    std::vector<double> trainingLoss;
+    std::vector<double> valLoss;
 
-    int epochs = 10000;
+    int epochs = 500;
 
     for(int i = 0 ; i < epochs ; i++){
         network.backwardPass(data, output);
@@ -196,11 +201,11 @@ vector<vector<double>> testY = {
     }
 
     for(int i = 0 ; i < trainingLoss.size() ; i++){
-        cout << trainingLoss[i] << endl;
-        cout << valLoss[i] << endl;
+        std::cout << trainingLoss[i] << std::endl;
+        std::cout << valLoss[i] << std::endl;
     }
 
-    cout << "N" << endl;
+    std::cout << "N" << std::endl;
 
     network.saveModel("model.bin");
 

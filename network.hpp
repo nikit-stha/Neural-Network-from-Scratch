@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fstream>
 #include <string>
+#include <cmath>
 
 namespace nn{
     enum class ActivationType{
@@ -80,14 +81,136 @@ namespace nn{
         int &inputFeatureDim;
         int &outputFeatureDim;
 
-        ActivationType &activationFunction;
+        ActivationType &activationType;
+
+        std::vector<std::vector<double>> &velocitydW;
+        std::vector<double> &velocitydB;
+        std::vector<std::vector<double>> &adamSecondMomentdW;
+        std::vector<double> &adamSecondMomentdB;
+        int &adamStep;
     };
+
+    class Activation{
+        private:
+            ActivationType activationType;
+        public:
+            Activation(ActivationType activationType){
+                this->activationType = activationType;
+            }
+            
+            std::vector<double> activation(std::vector<double> &z){
+                std::vector<double> output(z);
+                if(this->activationType == ActivationType :: ReLU){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        output[i] = std::max(0.0, z[i]);
+                    }
+                }
+                else if(this->activationType == ActivationType :: Sigmoid){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        output[i] = (1.0) / (1.0 + exp(-z[i]));
+                    }
+                }
+                else if(this->activationType == ActivationType :: Tanh){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        output[i] = tanh(z[i]);
+                    }
+                }
+                else if(this->activationType == ActivationType::Softmax){
+                    double maxZ = *max_element(z.begin(), z.end());
+                    double sum = 0.0;
+
+                    for(int i = 0; i < z.size(); i++){
+                        sum += exp(z[i] - maxZ);
+                    }
+                    for(int i = 0; i < z.size(); i++){
+                        output[i] = exp(z[i] - maxZ) / sum;
+                    }
+                }
+                else if(this->activationType == ActivationType :: GeLU){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        output[i] = 0.5 * z[i] * (1.0 + std::erf(z[i]/std::sqrt(2.0)));
+                    }
+                }
+                else if(this->activationType == ActivationType :: LeakyReLU){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        output[i] = std::max(0.01 * z[i], z[i]);
+                    }
+                }
+                else if(this->activationType == ActivationType :: Linear){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        output[i] = z[i];
+                    }
+                }
+                else{
+                    throw std::invalid_argument{"Activation Function is Invalid"};
+                }
+                return output;
+            }
+
+            std::vector<double> activationDerivative(std::vector<double> &z){
+                std::vector<double> derivative(z);
+                if(this->activationType == ActivationType :: ReLU){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        if(z[i] <= 0.0){
+                            derivative[i] = 0.0;
+                        }
+                        else{
+                            derivative[i] = 1.0;
+                        }
+                    }
+                }
+                else if(this->activationType == ActivationType :: Sigmoid){
+                    std::vector<double> output = activation(z);
+                    for(int i = 0 ; i < z.size() ; i++){
+                        derivative[i] = output[i] * (1.0 - output[i]);
+                    }
+                }
+                else if(this->activationType == ActivationType :: Tanh){
+                    std::vector<double> output = activation(z);
+                    for(int i = 0 ; i < z.size() ; i++){
+                        derivative[i] = (1.0 - output[i] * output[i]);
+                    }
+                }
+                else if(this->activationType == ActivationType :: GeLU){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        double cdf = 0.5 * (1.0 + std::erf(z[i] / std::sqrt(2.0)));
+                        double pdf = 0.3989422804014327 * std::exp(-0.5 * z[i] * z[i]);
+                        derivative[i] = cdf + z[i] * pdf;
+                    }
+                }
+                else if(this->activationType == ActivationType :: LeakyReLU){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        if(z[i] <= 0){
+                            derivative[i] = 0.01;
+                        }
+                        else{
+                            derivative[i] = 1.0;
+                        }
+                    }
+                }
+                else if(this->activationType == ActivationType :: Softmax){
+                    std::vector<double> output = activation(z);
+                    for(int i = 0 ; i < z.size() ; i++){
+                        derivative[i] = output[i] * (1.0 - output[i]);
+                    }
+                }
+                else if(this->activationType == ActivationType :: Linear){
+                    for(int i = 0 ; i < z.size() ; i++){
+                        derivative[i] = 1.0;
+                    }
+                }
+                return derivative;
+            }
+    
+        };
 
     class Layer{
         private:
             int inputFeatureDim;
             int outputFeatureDim;
-            ActivationType activationFunction;
+            ActivationType activationType;
+            Activation activationFunction;
+            
 
             std::vector<std::vector<double>> weights;
             std::vector<double> bias;
@@ -98,6 +221,12 @@ namespace nn{
 
             std::vector<std::vector<double>> dW;
             std::vector<double> dB;
+
+            std::vector<std::vector<double>>velocitydW;
+            std::vector<double>velocitydB;
+            std::vector<std::vector<double>>adamSecondMomentdW;
+            std::vector<double>adamSecondMomentdB;
+            int adamStep;
 
             void initialize(){
                 double limit = sqrt(6.0 / (inputFeatureDim + outputFeatureDim));
@@ -115,10 +244,11 @@ namespace nn{
             }
 
         public:
-            Layer(int inputFeatureDim, int outputFeatureDim, ActivationType activationFunction){
+            Layer(int inputFeatureDim, int outputFeatureDim, ActivationType activationType) : activationFunction(activationType){
                 this->inputFeatureDim = inputFeatureDim;
                 this->outputFeatureDim = outputFeatureDim;
-                this->activationFunction = activationFunction;
+                this->activationType = activationType;
+                this->adamStep = 0;
 
                 this->weights.resize((this->outputFeatureDim), std::vector<double> (this->inputFeatureDim));
                 this->bias.resize(this->outputFeatureDim);
@@ -126,116 +256,12 @@ namespace nn{
                 this->dW.resize(this->outputFeatureDim, std::vector<double>(this->inputFeatureDim, 0.0));
                 this->dB.resize(this->outputFeatureDim, 0.0);
 
+                this->velocitydW.resize(this->outputFeatureDim, std::vector<double>(this->inputFeatureDim, 0.0));
+                this->velocitydB.resize(this->outputFeatureDim, 0.0);
+                this->adamSecondMomentdW.resize(this->outputFeatureDim, std::vector<double>(this->inputFeatureDim, 0.0));
+                this->adamSecondMomentdB.resize(this->outputFeatureDim, 0.0);
+
                 initialize();
-            }
-
-            double normalPDF(double x, double mean, double sigma){
-            static const double inv_sqrt_2pi = 0.3989422804014327;
-            double a = (x - mean) / sigma;
-            return (inv_sqrt_2pi / sigma) * exp(-0.5 * a * a);
-            }
-
-            std::vector<double> activation(std::vector<double> &z){
-                std::vector<double> output(z);
-                if(this->activationFunction == ActivationType :: ReLU){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = std::max(0.0, z[i]);
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: Sigmoid){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = (1.0) / (1.0 + exp(-z[i]));
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: Tanh){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = tanh(z[i]);
-                    }
-                }
-                else if(this->activationFunction == ActivationType::Softmax){
-                    double maxZ = *max_element(z.begin(), z.end());
-                    double sum = 0.0;
-
-                    for(int i = 0; i < z.size(); i++){
-                        sum += exp(z[i] - maxZ);
-                    }
-                    for(int i = 0; i < z.size(); i++){
-                        output[i] = exp(z[i] - maxZ) / sum;
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: GeLU){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = z[i] * normalPDF(z[i], 0.0, 1.0);
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: LeakyReLU){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = std::max(0.01 * z[i], z[i]);
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: Linear){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        output[i] = z[i];
-                    }
-                }
-                else{
-                    throw std::invalid_argument{"Activation Function is Invalid"};
-                }
-                return output;
-            }
-
-            std::vector<double> activationDerivative(std::vector<double> &z){
-                std::vector<double> derivative(z);
-                if(this->activationFunction == ActivationType :: ReLU){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        if(z[i] <= 0.0){
-                            derivative[i] = 0.0;
-                        }
-                        else{
-                            derivative[i] = 1.0;
-                        }
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: Sigmoid){
-                    std::vector<double> output = activation(z);
-                    for(int i = 0 ; i < z.size() ; i++){
-                        derivative[i] = output[i] * (1.0 - output[i]);
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: Tanh){
-                    std::vector<double> output = activation(z);
-                    for(int i = 0 ; i < z.size() ; i++){
-                        derivative[i] = (1.0 - output[i] * output[i]);
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: GeLU){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        derivative[i] = normalPDF(z[i], 0.0, 1.0) + z[i] * normalPDF(z[i], 0.0, 1.0);
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: LeakyReLU){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        if(z[i] <= 0){
-                            derivative[i] = 0.01;
-                        }
-                        else{
-                            derivative[i] = 1.0;
-                        }
-                    }
-                }
-                else if(this->activationFunction == ActivationType :: Linear){
-                    for(int i = 0 ; i < z.size() ; i++){
-                        derivative[i] = 1.0;
-                    }
-                }
-                // else if(this->activationFunction == ActivationType :: Softmax){
-                //     //! Considering Softmax to be used with CrossCategoricalEntropyLoss
-                //     vector<double> softmax = activation(z);
-                //     for(int i = 0 ; i < z.size() ; i++){
-                //         derivative[i] = softmax[i] - z[i];
-                //     }
-                // }
-                return derivative;
             }
 
             std::vector<std::vector<double>> matmul(const std::vector<std::vector<double>> &weights, const std::vector<std::vector<double>> &input) {
@@ -265,7 +291,7 @@ namespace nn{
                     for(int j = 0 ; j < this->lastOutput[0].size() ; j++){
                         this->lastZ[i][j] += this->bias[j];
                     }
-                    this->lastOutput[i] = activation(this->lastZ[i]);
+                    this->lastOutput[i] = activationFunction.activation(this->lastZ[i]);
                 }
                 return this->lastOutput;
             }
@@ -275,7 +301,7 @@ namespace nn{
                 
                 std::vector<std::vector<double>> dl_dz(batchSize, std::vector<double>(this->outputFeatureDim));
 
-                if (this->activationFunction == ActivationType::Softmax) {
+                if (this->activationType == ActivationType::Softmax) {
                     //! Only For SoftMax (Bug)!
                     for(int i = 0; i < batchSize; i++){
                         for(int j = 0; j < this->outputFeatureDim; j++){
@@ -285,7 +311,7 @@ namespace nn{
                 }
                 else{
                     for(int i = 0 ; i < batchSize ; i++){
-                        std::vector<double> rows = activationDerivative(this->lastZ[i]);
+                        std::vector<double> rows = activationFunction.activationDerivative(this->lastZ[i]);
                         for(int j = 0 ; j < this->outputFeatureDim ; j++){
                             dl_dz[i][j] = dl_da[i][j] * rows[j];
                         }
@@ -327,7 +353,14 @@ namespace nn{
                     this->dB,
                     this->inputFeatureDim,
                     this->outputFeatureDim,
-                    this->activationFunction,
+                    this->activationType,
+
+                    this->velocitydW,
+                    this->velocitydB,
+
+                    this->adamSecondMomentdW,
+                    this->adamSecondMomentdB,
+                    this->adamStep
                 };
             }
         
@@ -337,6 +370,36 @@ namespace nn{
 
             std::vector<double> &getBias(){
                 return this->bias;
+            }
+    };
+
+    class ConvLayer{
+        private:
+            int inputChannel;
+            int outputChannel;
+            int kernel_size;
+            ActivationType activationType;
+            std::vector<std::vector<std::vector<double>>> weights;
+            std::vector<std::vector<double>> bias;
+
+            std::vector<std::vector<std::vector<double>>> lastInput;
+            std::vector<std::vector<std::vector<double>>> lastZ;
+            std::vector<std::vector<std::vector<double>>> lastOutput;
+
+            //! Initialize Function is Incomplete
+            void initialze(){
+
+            }
+        public:
+            ConvLayer(int inputChannel, int outputChannel, ActivationType activationType){
+                this->inputChannel = inputChannel;
+                this->outputChannel = outputChannel;
+                this->activationType = activationType;
+
+                this->weights.resize(this->outputChannel, std::vector<std::vector<double>>(kernel_size, std::vector<double>(kernel_size, 0.0)));
+                //! Skip Bias for Now
+
+                initialze();
             }
     };
 
@@ -355,7 +418,7 @@ namespace nn{
                 this->optimizer = optimizer;
             }
             
-            void addLayer(int inputFeatureDim, int outputFeatureDim, ActivationType activationType){
+            void Linear(int inputFeatureDim, int outputFeatureDim, ActivationType activationType){
                 layers.emplace_back(inputFeatureDim, outputFeatureDim, activationType);
             }
 
@@ -467,12 +530,49 @@ namespace nn{
                     }
                 }
                 else if(this->optimizer == Optimizer :: Momentum){
+                    const double beta = 0.9;
                     for(int l = layers.size() - 1 ; l >= 0 ; l--){
-                        Parameters param = layers[l].getParameters();
                         currentGradient = layers[l].backward(currentGradient);
+                        Parameters param = layers[l].getParameters();
+
                         for(int i = 0 ; i < param.outputFeatureDim ; i++){
-                            for(int j = 0 ; j < param.inputFeatureDim ; i++){
-                                //! Not Complete
+                            param.velocitydB[i] = beta * param.velocitydB[i] + (1.0 - beta) * param.dB[i];
+                            param.bias[i] -= this->learningRate * param.velocitydB[i];
+
+                            for(int j = 0 ; j < param.inputFeatureDim ; j++){
+                                param.velocitydW[i][j] = beta * param.velocitydW[i][j] + (1.0 - beta) * param.dW[i][j];
+                                param.weights[i][j] -= this->learningRate * param.velocitydW[i][j];
+                            }
+                        }
+                    }
+                }
+                else if(this->optimizer == Optimizer :: Adam){
+                    const double beta1 = 0.9;
+                    const double beta2 = 0.999;
+                    const double epsilon = 1e-8;
+
+                    for(int l = layers.size() - 1 ; l >= 0 ; l--){
+                        currentGradient = layers[l].backward(currentGradient);
+                        Parameters param = layers[l].getParameters();
+                        param.adamStep++;
+
+                        for(int i = 0 ; i < param.outputFeatureDim ; i++){
+                            double gradB = param.dB[i];
+                            param.velocitydB[i] = beta1 * param.velocitydB[i] + (1.0 - beta1) * gradB;
+                            param.adamSecondMomentdB[i] = beta2 * param.adamSecondMomentdB[i] + (1.0 - beta2) * gradB * gradB;
+
+                            double mHatB = param.velocitydB[i] / (1.0 - std::pow(beta1, param.adamStep));
+                            double vHatB = param.adamSecondMomentdB[i] / (1.0 - std::pow(beta2, param.adamStep));
+                            param.bias[i] -= this->learningRate * (mHatB / (std::sqrt(vHatB) + epsilon));
+
+                            for(int j = 0 ; j < param.inputFeatureDim ; j++){
+                                double gradW = param.dW[i][j];
+                                param.velocitydW[i][j] = beta1 * param.velocitydW[i][j] + (1.0 - beta1) * gradW;
+                                param.adamSecondMomentdW[i][j] = beta2 * param.adamSecondMomentdW[i][j] + (1.0 - beta2) * gradW * gradW;
+
+                                double mHatW = param.velocitydW[i][j] / (1.0 - std::pow(beta1, param.adamStep));
+                                double vHatW = param.adamSecondMomentdW[i][j] / (1.0 - std::pow(beta2, param.adamStep));
+                                param.weights[i][j] -= this->learningRate * (mHatW / (std::sqrt(vHatW) + epsilon));
                             }
                         }
                     }
@@ -509,7 +609,7 @@ namespace nn{
                     file.write((char *)(&params.outputFeatureDim), sizeof(params.outputFeatureDim));
 
                     // Write Activation Function
-                    file.write((char *)(&params.activationFunction), sizeof(params.activationFunction));
+                    file.write((char *)(&params.activationType), sizeof(params.activationType));
                     
                     // Write Weights
                     for(int i = 0 ; i < params.outputFeatureDim ; i++){
