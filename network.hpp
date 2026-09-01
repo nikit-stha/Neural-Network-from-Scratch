@@ -373,13 +373,16 @@ namespace nn{
             }
     };
 
-    class ConvLayer{
+    class Conv2DLayer{
         private:
             int inputChannel;
             int outputChannel;
             int kernel_size;
+            int stride;
             ActivationType activationType;
-            std::vector<std::vector<std::vector<double>>> weights;
+            Activation activationFunction;
+
+            std::vector<std::vector<std::vector<std::vector<double>>>> weights; // [outputChannel][inputChannel][height][width]
             std::vector<std::vector<double>> bias;
 
             std::vector<std::vector<std::vector<double>>> lastInput;
@@ -391,16 +394,67 @@ namespace nn{
 
             }
         public:
-            ConvLayer(int inputChannel, int outputChannel, ActivationType activationType){
+            Conv2DLayer(int inputChannel, int outputChannel, int kernel_size, int stride = 1, ActivationType activationType) : activationFunction(activationType){
                 this->inputChannel = inputChannel;
                 this->outputChannel = outputChannel;
                 this->activationType = activationType;
+                this->kernel_size = kernel_size;
+                this->stride = stride;
 
-                this->weights.resize(this->outputChannel, std::vector<std::vector<double>>(kernel_size, std::vector<double>(kernel_size, 0.0)));
+                this->weights.resize(this->outputChannel, std::vector<std::vector<std::vector<double>>>(this->inputChannel, std::vector<std::vector<double>>(kernel_size, std::vector<double>(kernel_size, 0.0))));
                 //! Skip Bias for Now
 
                 initialze();
             }
+            
+            std::vector<std::vector<std::vector<double>>> convolve(std::vector<std::vector<std::vector<double>>> &input, std::vector<std::vector<std::vector<std::vector<double>>>> &kernel){
+                int inputChannel = input.size();
+                int outputChannel = kernel.size();
+                
+                int inputRows = input[0].size();
+                int outputRows = input[0][0].size();
+                
+                int outputRows = (input.size() - kernel.size()) / stride + 1;
+                int outputCols = (input[0].size() - kernel[0].size()) / stride + 1;
+
+                int kernelRows = kernel[0][0].size();
+                int kernelCols = kernel[0][0][0].size();
+
+                std::vector<std::vector<std::vector<double>>> output(outputChannel, std::vector<std::vector<double>>(outputRows, std::vector<double>(outputCols, 0.0)));
+
+                // For every output channel
+                for(int oc = 0 ; oc < outputChannel ; oc++){
+
+                    // Every output pixel
+                    for(int i = 0 ; i < outputRows ; i++){
+                        for(int j = 0 ; j < outputCols ; j++){
+                            double sum = 0;
+                            // Sum over every input channel
+                            for(int ic = 0 ; i < inputChannel ; ic++){
+                                // Kernel
+                                for(int k = 0 ; k < kernelRows ; k++){
+                                    for(int l = 0 ; l < kernelCols ; l++){
+                                        sum += input[ic][i * stride + k][j * stride + l] * kernel[oc][ic][k][l];
+                                    }
+                                }
+                            }
+                            output[oc][i][j] = sum;
+                        }
+                    }
+                }
+                return output;
+            }
+
+            std::vector<std::vector<std::vector<double>>> forward(std::vector<std::vector<std::vector<double>>> &input){
+                int numChannels = input.size();
+                int numRows = input[0].size();
+                int numCols = input[0][0].size();
+
+                int outputRows = (numRows - this->kernel_size) / this->stride + 1;
+                int outputCols = (numCols - this->kernel_size) / this->stride + 1;
+
+                std::vector<std::vector<std::vector<double>>> output(outputChannel, std::vector<std::vector<double>>(outputRows, std::vector<double>(outputCols)));
+
     };
 
     class Network{

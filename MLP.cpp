@@ -1,6 +1,7 @@
 #include <network.hpp>
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 using namespace nn;
 
@@ -10,6 +11,8 @@ int inputFeatureDim = 784;
 int epochs = 3;
 
 int main(){
+
+
 
 std::vector<std::vector<double>> data = {
     // Class 0
@@ -191,7 +194,9 @@ std::vector<std::vector<double>> testY = {
     std::vector<double> trainingLoss;
     std::vector<double> valLoss;
 
-    int epochs = 500;
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    int epochs = 50000;
 
     for(int i = 0 ; i < epochs ; i++){
         network.backwardPass(data, output);
@@ -199,13 +204,18 @@ std::vector<std::vector<double>> testY = {
         valLoss.push_back(network.loss(testX, testY));
 
     }
+    auto endTime = std::chrono::high_resolution_clock::now();
 
     for(int i = 0 ; i < trainingLoss.size() ; i++){
         std::cout << trainingLoss[i] << std::endl;
         std::cout << valLoss[i] << std::endl;
     }
 
+    std::chrono::duration<double> duration = endTime - startTime;
+
     std::cout << "N" << std::endl;
+
+    std::cout << "Training time: " << duration.count() << " seconds" << std::endl;
 
     network.saveModel("model.bin");
 
