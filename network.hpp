@@ -389,12 +389,37 @@ namespace nn{
             std::vector<std::vector<std::vector<double>>> lastZ;
             std::vector<std::vector<std::vector<double>>> lastOutput;
 
-            //! Initialize Function is Incomplete
             void initialze(){
+                int outputChannel = this->weights.size();
+                int inputChannel = this->weights[0].size();
+                int numRows = this->weights[0][0].size();
+                int numCols = this->weights[0][0][0].size();
+
+                int kernelSpacialSize = numRows * numCols;
+                int fanIn = kernelSpacialSize * inputChannel;
+                int fanOut = kernelSpacialSize * outputChannel;
+
+                double limit = sqrt(6.0 / (fanIn + fanOut));
+
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<double> dist(-limit, limit);
+
+                for(int oc = 0 ; oc < outputChannel ; oc++){
+                    for(int ic = 0 ; ic < inputChannel ; ic++){
+                        for(int i = 0 ; i < numRows ; i++){
+                            for(int j = 0 ; j < numCols ; j++){
+                                this->weights[oc][ic][i][j] = dist(gen);
+                            }
+                        }
+                    }
+                }
 
             }
+        
         public:
-            Conv2DLayer(int inputChannel, int outputChannel, int kernel_size, int stride = 1, ActivationType activationType) : activationFunction(activationType){
+
+            Conv2DLayer(int inputChannel, int outputChannel, int kernel_size, int stride, ActivationType activationType) : activationFunction(activationType){
                 this->inputChannel = inputChannel;
                 this->outputChannel = outputChannel;
                 this->activationType = activationType;
@@ -412,13 +437,13 @@ namespace nn{
                 int outputChannel = kernel.size();
                 
                 int inputRows = input[0].size();
-                int outputRows = input[0][0].size();
-                
-                int outputRows = (input.size() - kernel.size()) / stride + 1;
-                int outputCols = (input[0].size() - kernel[0].size()) / stride + 1;
+                int inputCols = input[0][0].size();
 
                 int kernelRows = kernel[0][0].size();
                 int kernelCols = kernel[0][0][0].size();
+
+                int outputRows = (inputRows - kernelRows) / stride + 1;
+                int outputCols = (inputCols - kernelCols) / stride + 1;
 
                 std::vector<std::vector<std::vector<double>>> output(outputChannel, std::vector<std::vector<double>>(outputRows, std::vector<double>(outputCols, 0.0)));
 
@@ -430,7 +455,7 @@ namespace nn{
                         for(int j = 0 ; j < outputCols ; j++){
                             double sum = 0;
                             // Sum over every input channel
-                            for(int ic = 0 ; i < inputChannel ; ic++){
+                            for(int ic = 0 ; ic < inputChannel ; ic++){
                                 // Kernel
                                 for(int k = 0 ; k < kernelRows ; k++){
                                     for(int l = 0 ; l < kernelCols ; l++){
@@ -447,15 +472,33 @@ namespace nn{
 
             std::vector<std::vector<std::vector<double>>> forward(std::vector<std::vector<std::vector<double>>> &input){
                 int numChannels = input.size();
+
                 int numRows = input[0].size();
                 int numCols = input[0][0].size();
 
-                int outputRows = (numRows - this->kernel_size) / this->stride + 1;
-                int outputCols = (numCols - this->kernel_size) / this->stride + 1;
+                int kernelRows = this->weights[0][0].size();
+                int kernelCols = this->weights[0][0][0].size();
 
-                std::vector<std::vector<std::vector<double>>> output(outputChannel, std::vector<std::vector<double>>(outputRows, std::vector<double>(outputCols)));
+                int outputRows = (numRows - kernelRows) / this->stride + 1;
+                int outputCols = (numCols - kernelCols) / this->stride + 1;
 
-    };
+                std::vector<std::vector<std::vector<double>>> z = convolve(input, weights);
+                std::vector<std::vector<std::vector<double>>> output = z;
+
+                int outputChannels = z.size();
+                for(int oc = 0 ; oc < outputChannels ; oc++){
+                    for(int i = 0 ; i < outputRows ; i++){
+                        output[oc][i] = activationFunction.activation(z[oc][i]);
+                    }
+                }
+                return output;
+            }
+
+            //! Not Complete
+            std::vector<std::vector<std::vector<double>>> backward(){
+
+            }
+};
 
     class Network{
         private:

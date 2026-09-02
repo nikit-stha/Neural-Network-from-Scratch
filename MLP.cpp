@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono>
 
+using namespace std;
 using namespace nn;
 
 int batchSize = 1;
@@ -11,9 +12,6 @@ int inputFeatureDim = 784;
 int epochs = 3;
 
 int main(){
-
-
-
 std::vector<std::vector<double>> data = {
     // Class 0
     {1.0, 2.0, 1.5},
