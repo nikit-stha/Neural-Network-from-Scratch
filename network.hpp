@@ -496,6 +496,7 @@ namespace nn{
 
             //! Not Complete
             std::vector<std::vector<std::vector<double>>> backward(){
+                
             }
 };
 
